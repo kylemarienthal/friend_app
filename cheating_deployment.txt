@@ -1,0 +1,86 @@
+Important Notes
+
+friends_application == the name of your repository on GitLab
+main == the name you used for the django-admin startproject command
+54.152.239.134 == the public IP address of your Amazon EC2 instance
+Deployment Instructions
+
+Follow instructions on Learn to create a new Amazon EC2 instance. Make sure to select Ubuntu 16.04. You can use an existing .pem file or you can create a new one. Save the .pem file in a location OUTSIDE OF YOUR PROJECT FOLDER. A folder on the desktop for .pem files is a good idea.
+
+Create a new repository on GitLab for your project.
+
+Activate your VIRTUAL ENVIRONMENT then navigate to your project folder and make a list of your dependencies
+
+1-
+pip freeze > requirements.txt && vim .gitignore
+***Setup .gitignore file
+2-
+***Edit the contents of .gitignore like so
+
+*.pyc
+venv/
+.DS_Store
+.idea
+.vs_code
+
+***Push your project to GitLab
+3-
+git init && git remote add origin https://gitlab.com/kylemarienthal/friends_application.git && git add . && git commit -m 'initial commit' && git push origin master && cd ../../aws && ssh -i aws_credentials.pem ubuntu@54.152.239.134
+
+3a-
+sudo apt-get update && sudo apt-get install python-pip python-dev nginx git && sudo apt-get update && sudo pip install virtualenv && git clone https://gitlab.com/kylemarienthal/friends_application.git && kylemarienthal
+4-
+cd friends_application && virtualenv venv && source venv/bin/activate && pip install -r requirements.txt && pip install django bcrypt django-extensions && pip install gunicorn && cd main && sudo vim settings.py
+5-
+***You're now using vim, press i to go into Insert Mode and edit the following lines
+
+DEBUG = False
+ALLOWED_HOSTS = ['54.152.239.134']
+# add the line below to the bottom of the file
+
+STATIC_ROOT = os.path.join(BASE_DIR, "static/")
+save and quit
+6-
+cd .. && python manage.py collectstatic
+***If a yes/no prompt appears. Type yes
+ip:~RepoName$ gunicorn --bind 0.0.0.0:8000 main.wsgi:application
+(should return starting gunicorn 19.6.0, listening at: http://0.0.0.0.8000, using worker:sync, Booting worker w/ PID:8700)
+6a-
+ctrl c to get out of it
+7-
+deactivate && sudo vim /etc/systemd/system/gunicorn.service
+***You're now using vim, press i to go into Insert Mode and paste the following code
+8-
+[Unit]
+Description=gunicorn daemon
+After=network.target
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/friends_application
+ExecStart=/home/ubuntu/friends_application/venv/bin/gunicorn --workers 3 --bind unix:/home/ubuntu/friends_application/main.sock main.wsgi:application
+[Install]
+WantedBy=multi-user.target
+9-
+sudo systemctl daemon-reload && sudo systemctl start gunicorn && sudo systemctl enable gunicorn && cd /etc/nginx/sites-available && sudo vim friends_application
+***You're now using vim, press i to go into Insert Mode and paste the following code
+10-
+server {
+  listen 80;
+  server_name 54.152.239.134;
+  location = /favicon.ico { access_log off; log_not_found off; }
+  location /static/ {
+      root /home/ubuntu/friends_application;
+  }
+  location / {
+      include proxy_params;
+      proxy_pass http://unix:/home/ubuntu/friends_application/main.sock;
+  }
+}
+11-
+sudo rm default && sudo ln -s /etc/nginx/sites-available/friends_application /etc/nginx/sites-enabled && sudo nginx -t && sudo service nginx restart
+
+
+
+
+You're deployed! Just type your public-ip into the address bar of your web browser and you should see your website!
